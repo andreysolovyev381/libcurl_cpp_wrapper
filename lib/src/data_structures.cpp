@@ -52,7 +52,7 @@ namespace curl_client {
 		  full_str += elem;
 		  full_str += delim;
 	  }
-//  	full_str.pop_back(); //remove last '/' - delim
+  	full_str.pop_back(); //remove last '/' - delim
 	  is_update_required = false;
   }
 

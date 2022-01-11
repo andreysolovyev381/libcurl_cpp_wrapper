@@ -41,6 +41,8 @@ namespace curl_client {
 	  const HttpHeaders& headersGetAll () const;
 	  const HttpHeader& headerGetOne(HeaderName name) const;
 
+	  static Query makeQuery (std::string &&input) ;
+
   private:
 	  //curl
 	  Curl curl;
