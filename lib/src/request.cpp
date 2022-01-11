@@ -148,6 +148,11 @@ namespace curl_client {
 	  return curl->getRequestHeaderAt(name);
   }
 
+  Query Request::makeQuery (std::string &&input) {
+  	QueryData qd (std::move(input));  //todo: naive implementation, temporary plugin
+  	return std::make_unique<QueryData>(std::move(qd));
+  }
+
 
   void Print (const Response &response, std::ostream &os, bool print_headers) {
 	  if (not response) {
