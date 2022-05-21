@@ -199,6 +199,9 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 	  curl_handle = curl_easy_init();
 	  if (curl_handle) {
 
+		  //ADDED HTTP/2 support
+		  curl_easy_setopt(curl_handle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+
 		  //error buffer
 		  curl_easy_setopt(curl_handle, CURLOPT_ERRORBUFFER, &buf_error);
 		  // follow the "Location:" in HTTP header
