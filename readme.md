@@ -22,9 +22,20 @@ Allows to manage:
 	curl_client::Print(response, std::cout);
 ...
 ```
+For more examples see the ./test folder
 
 ### Testing 
 Done using this special purpose and very nice [website](https://httpbin.org/). Indeed, there is no guarantee it stays online forever. 
+
+### Usage
+* Copy-paste ./curl_client into your source dir
+* link curl_client lib into your project, see ./tests/CMakeLists.txt as an example:
+```CMake
+target_link_libraries(${TESTS_NAME}
+        ${GTEST_LIBRARIES}
+        curl_client
+)
+```
 
 ### License
 MIT

@@ -31,7 +31,7 @@ endif()
 add_executable(${TESTS_NAME}
         ./tests_verbs.cpp
         ./tests_statuses.cpp
-        tests_echo_returns.cpp
+        ./tests_echo_returns.cpp
         ./tests_headers.cpp
         ./main.cpp
 )
