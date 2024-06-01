@@ -19,8 +19,7 @@ target_compile_options(${LIBRARY_NAME}
 )
 target_include_directories(${LIBRARY_NAME}
         PUBLIC
-        ${CMAKE_BINARY_DIR}/src
-        ${CMAKE_BINARY_DIR}/src/executable
+        ${CMAKE_SOURCE_DIR}/src
 )
 target_link_libraries(${LIBRARY_NAME}
         PRIVATE
