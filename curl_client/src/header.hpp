@@ -30,6 +30,7 @@ namespace curl_client {
 	class header final {
 	public:
 		using field_type = std::string;
+
 		using value_type = std::string;
 
 		header() = default;
@@ -66,7 +67,9 @@ namespace curl_client {
 	private:
 
 		field_type field_;
+
 		value_type value_;
+
 		std::string curl_header_;
 
 		bool empty () const {

@@ -23,13 +23,20 @@ namespace curl_client {
 	namespace http {
 
 		struct query_data final {
+
 			std::size_t sizeleft;
+
 			std::size_t curr_offset;
+
 			std::size_t curr_chunk_size;
+
 			std::string query_str;
 
 			explicit query_data(std::string q)
-					: sizeleft(q.size()), curr_offset(0), curr_chunk_size(0), query_str(std::move(q)){}
+					: sizeleft(q.size())
+					, curr_offset(0)
+					, curr_chunk_size(0)
+					, query_str(std::move(q)){}
 
 			query_data() = delete;
 		};

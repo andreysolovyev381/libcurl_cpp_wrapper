@@ -25,12 +25,17 @@ namespace curl_client {
 	};
 
 	struct response_data final {
+
 		using Headers = std::vector<std::string>;
+
 		using Body = std::variant<std::monostate, Json::Document, std::string>;
 
 		bool request_ok;
+
 		std::string response_code;
+
 		Body body;
+
 		Headers headers;
 	};
 
