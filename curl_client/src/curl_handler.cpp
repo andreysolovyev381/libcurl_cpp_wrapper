@@ -24,11 +24,25 @@ namespace curl_client {
 		  curl_handle = nullptr;
 
 	  }
-	  /* free headers */
+	  /**
+	   * @dev
+	   * this is supposed to free headers in curl slist,
+	   * but char* that is a data for each node is a pointer
+	   * to header in the map;
+	   * map will be cleaned by dtor, therefore slist should be cleaned
+	   * only from the pointers (data structure itself)
+	   */
 	  if (headers_list) {
+#if 0
 		  curl_slist_free_all(headers_list);
-		  headers_list = nullptr;
+#endif
+		  while(headers_list) {
+			  auto tmp {headers_list->next};
+			  delete headers_list;
+			  std::swap(headers_list, tmp);
+		  }
 	  }
+
 	  curl_global_cleanup();
   }
 

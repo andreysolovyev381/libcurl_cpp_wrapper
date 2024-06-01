@@ -39,18 +39,25 @@ TEST(headers, headers_sent) {
 }
 
 
-TEST(headers, user_defined_header) {
+TEST(headers, header_update) {
 	//this url echoes request headers as a response body
 	std::string const test_url {"https://httpbin.org/headers"};
 	curl_client::request request;
 
 	curl_client::response response = request.
 			setURL(test_url)->
-			set_header(curl_client::http::header("Some Arbitrary Field", "Some Arbitrary Value of 42"))->
 			implement(curl_client::Method::Get);
 
-	auto const& txt {std::get<std::string>(response->body)}; std::cout << txt << '\n';
+	auto const& response_1 {std::get<std::string>(response->body)};
+	ASSERT_TRUE(response_1.find("Accept") != std::string::npos);
+	ASSERT_TRUE(response_1.find("application/json") != std::string::npos);
 
-	ASSERT_TRUE(txt.find("Some Arbitrary Field") != std::string::npos);
-	ASSERT_TRUE(txt.find("Some Arbitrary Value of 42") != std::string::npos);
+	response = request.
+			setURL(test_url)->
+			set_header(curl_client::http::header("Accept", "text"))->
+			implement(curl_client::Method::Get);
+
+	auto const& response_2 {std::get<std::string>(response->body)};
+	ASSERT_TRUE(response_2.find("Accept") != std::string::npos);
+	ASSERT_TRUE(response_2.find("text") != std::string::npos);
 }
