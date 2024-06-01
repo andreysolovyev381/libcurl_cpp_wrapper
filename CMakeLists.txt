@@ -1,17 +1,12 @@
 cmake_minimum_required(VERSION 3.19)
-set (LIB_USAGE "lib_usage")
+set (PROJECT_NAME "Curl client mini library")
 
-project(${LIB_USAGE})
+project(${PROJECT_NAME}
+        VERSION 0.1
+        DESCRIPTION "C++20 wrapper for libcurl with a bare minimum of functionality"
+        LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
-add_subdirectory(lib)  #allows to select target
 
-find_package (CURL REQUIRED)
-include_directories(${CURL_INCLUDE_DIRS})
-message(STATUS "CURL INCLUDE DIRS ${CURL_INCLUDE_DIRS}")
-
-add_executable(${LIB_USAGE} main.cpp)
-target_link_libraries(${LIB_USAGE}
-        ${CURL_LIBRARY}
-        /Users/elenasolovyeva/Documents/Cpp/Projects/curl_client/cmake-build-debug/lib/libcurl_client.a
-        )
+add_subdirectory(curl_client)
+add_subdirectory(./tests)

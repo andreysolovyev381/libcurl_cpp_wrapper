@@ -6,17 +6,15 @@
 
 #include <curl/curl.h>
 
-#include "data_structures.h"
+#include "query.hpp"
+#include "header.hpp"
+#include "response.hpp"
 #include "json.h"
+#include "const_curl_codes.h"
+#include "const_values.h"
 
-#include <unordered_map>
-#include <vector>
-#include <string>
-#include <variant>
-#include <memory>
-
-#ifndef CURL_HANDLER_H
-#define CURL_HANDLER_H
+#include <array>
+#include <cstring>
 
 namespace curl_client {
 
@@ -24,18 +22,17 @@ namespace curl_client {
   public:
 	  CurlHandler();
 	  ~CurlHandler();
-	  void setHeaders(const HttpHeaders &headers = {});
-	  void setHeader (HttpHeader header);
-	  void removeHeader (HeaderName name);
+	  void setHeaders(http::headers headers = {});
+	  void setHeader (http::header header);
+	  void removeHeader (http::header::field_type const& name);
 	  void setUrl (const std::string &url);
 	  void setMethod(Method method);
-	  void setQuery(Query&& query);
+	  void setQuery(http::query_data_ptr&& query);
 	  void setVerbose(bool verbose);
 	  void performRequest ();
 
-	  CURL* getCurlHandler() const;
-	  const HttpHeaders& getRequestHeaders() const;
-	  const HttpHeader& getRequestHeaderAt(HeaderName name) const;
+	  http::headers const& getRequestHeaders() const;
+	  http::header const& getRequestHeaderAt(http::header::field_type const& name) const;
 	  std::string getResponseBody ();
 	  ResponseType getResponseType() const;
 	  std::vector<std::string> getResponseHeaders ();
@@ -46,11 +43,12 @@ namespace curl_client {
   private:
 	  //curl data
 	  CURL* curl_handle;
-	  struct curl_slist *headers_list = NULL;
-	  HttpHeaders headers;
-	  HttpHeader empty_header;
+	  struct curl_slist *headers_list = nullptr;
 
-	  std::string buf_response, buf_error;
+	  http::headers headers;
+
+	  std::array<char, CURL_ERROR_SIZE> buf_error;
+	  std::string buf_response;
 	  std::vector<std::string> buf_headers;
 	  CURLcode request_return_code;
 
@@ -66,7 +64,7 @@ namespace curl_client {
 	  //method
 	  Method method;
 	  [[nodiscard]] bool isSetMethod(Method new_method) const;
-	  void updateMethod(const Method method);
+	  void updateMethod(Method method);
 	  static const std::unordered_map <Method, void (CurlHandler::*)()> set_method;
 	  void setNone();
 	  void setGet();
@@ -74,14 +72,12 @@ namespace curl_client {
 	  void setPut();
 	  void setDelete();
 	  void setPatch();
+	  void setFTPListOnly();
 
 	  //query
-	  Query buf_query;
+	  http::query_data_ptr buf_query;
 	  void setNewQuery(std::string&& q);
-	  static bool hasDataToCopy(QueryData *p_q);
-	  static size_t getCurrQuerySize(QueryData *p_q);
-	  static void copyDataToBuffer(char* buffer, size_t buffer_size, QueryData *q);
-	  static size_t getCopiedCount(QueryData *p_q);
+	  static size_t getCurrQuerySize(http::query_data *p_q);
 
 	  //response
 	  ResponseType response_mime_type;
@@ -91,5 +87,3 @@ namespace curl_client {
 
 	using Curl = std::unique_ptr<CurlHandler>;
 }
-
-#endif //CURL_HANDLER_H

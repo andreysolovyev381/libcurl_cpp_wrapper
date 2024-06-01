@@ -2,12 +2,8 @@
 // Created by Andrey Solovyev on 27/09/2021.
 //
 
-#include "const_curl_codes.h"
-#include "const_values.h"
-
 #include "curl_handler.h"
 #include <stdexcept>
-#include <type_traits>
 #include <utility>
 
 namespace curl_client {
@@ -16,43 +12,51 @@ namespace curl_client {
 #define DEBUG_OUPUT
 
   CurlHandler::CurlHandler() {
-	  buf_response.reserve(EXPECTED_REQUEST_SIZE);
-	  buf_error.reserve(CURL_ERROR_SIZE);
-	  buf_headers.reserve(EXPECTED_HEADERS_RESPONSE_COUNT);
+	  buf_response.reserve(curl_client::const_values::EXPECTED_REQUEST_SIZE);
+	  buf_error.fill('\0');
+	  buf_headers.reserve(curl_client::const_values::EXPECTED_HEADERS_RESPONSE_COUNT);
 	  Init();
   }
+
   CurlHandler::~CurlHandler() {
-	  if (curl_handle) curl_easy_cleanup(curl_handle);
+	  if (curl_handle) {
+		  curl_easy_cleanup(curl_handle);
+		  curl_handle = nullptr;
+
+	  }
 	  /* free headers */
-	  if (headers_list) curl_slist_free_all(headers_list);
+	  if (headers_list) {
+		  curl_slist_free_all(headers_list);
+		  headers_list = nullptr;
+	  }
+	  curl_global_cleanup();
   }
 
-  void CurlHandler::setHeaders(const HttpHeaders &headers){
-	  if (curl_handle) {
+  void CurlHandler::setHeaders(http::headers headers){
+	  if (!curl_handle) {
+		  THROW_CURL
+	  }
 
-		  if (not headers.empty()) {
-			  for (const auto &[_, header] : headers) {
-				  const auto [it, ok] = this->headers.insert({header.name, header});
-				  if (ok) headers_list = curl_slist_append(headers_list, it->second().data());
-			  }
+	  if (!headers.empty()) {
+		  for (auto &[name, header] : headers) {
+			  setHeader(std::move(header));
 		  }
-		  else {
-			  for (const auto &[name, header] : headers_by_default) {
-				  HttpHeader h {.name = name, .value = header};
-				  const auto [it, ok] = this->headers.insert({h.name, std::move(h)});
-				  if (ok) headers_list = curl_slist_append(headers_list, it->second().data());
-			  }
+	  }
+	  else {
+		  for (auto const& [field, value] : curl_client::const_values::headers_by_default) {
+			  setHeader(http::header(field, value));
 		  }
+	  }
 
-		  /*
-  If you use POST to a HTTP 1.1 server, you can send data without knowing
-  the size before starting the POST if you use chunked encoding. You
-  enable this by adding a header like "Transfer-Encoding: chunked" with
-  CURLOPT_HTTPHEADER. With HTTP 1.0 or without chunked transfer, you must
-  specify the size in the request.
+	  /*
+If you use POST to a HTTP 1.1 server, you can send data without knowing
+the size before starting the POST if you use chunked encoding. You
+enable this by adding a header like "Transfer-Encoding: chunked" with
+CURLOPT_HTTPHEADER. With HTTP 1.0 or without chunked transfer, you must
+specify the size in the request.
 */
 #ifdef USE_CHUNKED
-		  {
+	  {
   			//		  	struct curl_slist *chunk = NULL;
 
   			chunk = curl_slist_append(chunk, "Transfer-Encoding: chunked");
@@ -66,7 +70,7 @@ namespace curl_client {
 #endif
 
 #ifdef DISABLE_EXPECT
-		  /*
+	  /*
 Using POST with HTTP 1.1 implies the use of a "Expect: 100-continue"
 header.  You can disable this header with CURLOPT_HTTPHEADER as usual.
 NOTE: if you want chunked transfer too, you need to combine these two
@@ -82,49 +86,58 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 }
 #endif
 
-		  curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers_list);
+	  curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers_list);
+
+	  if (not headers_list) {
+		  throw std::runtime_error("Unable to SET HEADERS\n" + std::string(__PRETTY_FUNCTION__));
 	  }
-	  else THROW_CURL
-	  if (not headers_list)
-		  throw std::runtime_error("Unable to SET HEADERS\n"+std::string(__PRETTY_FUNCTION__));
   }
 
-  void CurlHandler::setHeader (HttpHeader header) {
+  void CurlHandler::setHeader (http::header header) {
 	  auto *h = headers_list;
 	  while (h) {
 		  std::string_view h_view (h->data);
 		  auto pos = h_view.find(':');
-		  if (pos == h_view.npos) continue;
-		  if (h_view.substr(0, pos) == header.name) {
-			  const auto [it, res] = this->headers.insert({header.name, std::move(header)}); //todo:: looks like it is going to fall
-			  h->data = it->second().data();
+		  if (pos == h_view.npos) {
+			  continue;
+		  }
+		  if (h_view.substr(0, pos) == header.field()) {
+			  auto& header_in_place {headers[header.field()]};
+			  header_in_place = std::move(header);
+			  h->data = const_cast<char*>(header_in_place.curl_header());
+
 			  return;
 		  }
 		  h = h->next;
 	  }
-	  const auto [it, res] = this->headers.insert({header.name, std::move(header)}); //todo:: looks like it is going to fall
-	  headers_list = curl_slist_append(headers_list, it->second().data());
+	  auto [inserted, ok] = headers.insert({header.field(), std::move(header)});
+	  headers_list = curl_slist_append(headers_list, const_cast<char*>(inserted->second.curl_header()) );
   }
 
-  void CurlHandler::removeHeader (HeaderName name) {
-	  if (auto it = headers.find(name); it != headers.end()) {
-		  auto *curr = headers_list, *prev = headers_list;
-		  while (curr) {
-			  std::string_view h_view (curr->data);
-			  auto pos = h_view.find(':');
-			  if (pos == h_view.npos) continue;
-			  if (h_view.substr(0, pos) == name) {
-			  	prev->next = curr->next;
-			  	delete curr;
-			  	return;
-			  }
-			  prev = curr;
-			  curr = curr->next;
-		  }
-		  headers.erase(it);
-	  }
-  }
+	void CurlHandler::removeHeader (http::header::field_type const& field) {
+		auto found = headers.find(field);
+		if (found == headers.end()) {
+			return;
+		}
 
+		headers.erase(found);
+
+		auto *curr = headers_list, *prev = headers_list;
+		while (curr) {
+			std::string_view h_view (curr->data);
+			auto pos = h_view.find(':');
+			if (pos == h_view.npos) {
+				continue;
+			}
+			if (h_view.substr(0, pos) == field) {
+				prev->next = curr->next;
+				delete curr;
+				return;
+			}
+			prev = curr;
+			curr = curr->next;
+		}
+	}
 
   void CurlHandler::setUrl (const std::string &url){
 	  if(curl_handle) {
@@ -132,11 +145,15 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 	  }
 	  else THROW_CURL
   }
+
   void CurlHandler::setMethod (Method method) {
 	  if (not isSetMethod(method)) updateMethod(method);
   }
-  void CurlHandler::setQuery(Query&& query) {
-	  if (not query) throw std::runtime_error("No query\n"+std::string(__PRETTY_FUNCTION__));
+
+  void CurlHandler::setQuery(http::query_data_ptr&& query) {
+	  if (not query) {
+		  throw std::runtime_error("No query\n"+std::string(__PRETTY_FUNCTION__));
+	  }
 	  buf_query = std::move(query);
 	  if(curl_handle) {
 		  /* pointer to pass to our read function */
@@ -165,37 +182,43 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 	  else THROW_CURL
   }
 
-  CURL* CurlHandler::getCurlHandler() const {
-	  return curl_handle;
-  }
-  const HttpHeaders& CurlHandler::getRequestHeaders() const {
+  const http::headers& CurlHandler::getRequestHeaders() const {
 	  return headers;
   }
-  const HttpHeader& CurlHandler::getRequestHeaderAt(HeaderName name) const {
-	  if (auto it = headers.find(name); it != headers.end()) return it->second;
-	  return empty_header;
+
+  const http::header& CurlHandler::getRequestHeaderAt(http::header::field_type const& name) const {
+	  if (auto it = headers.find(name); it != headers.end()) {
+		  return it->second;
+	  }
+	  return http::empty_header;
   }
 
   std::string CurlHandler::getResponseBody () {
 	  return std::move(buf_response);
   }
+
   ResponseType CurlHandler::getResponseType() const {
 	  return response_mime_type;
   }
+
   std::string CurlHandler::getError(){
-	  return std::move(buf_error);
+	  return std::string(buf_error.begin(), buf_error.end());
   }
+
   std::vector<std::string> CurlHandler::getResponseHeaders () {
 	  return std::move(buf_headers);
   }
+
   const std::string& CurlHandler::getResponseCode () const {
 	  return curl_codes.at(request_return_code);
   }
+
   bool CurlHandler::checkRequestOk() const {
 	  return request_return_code == CURLE_OK;
   }
 
   void CurlHandler::Init() {
+	  curl_global_init(CURL_GLOBAL_DEFAULT);
 	  curl_handle = curl_easy_init();
 	  if (curl_handle) {
 
@@ -214,35 +237,40 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 
 		  //query, if any
 		  /* we want to use our own read function */
-		  curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION, read_callback);
+		  curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION, &CurlHandler::read_callback); //static
 		  /* pointer to pass to our read function */
 		  curl_easy_setopt(curl_handle, CURLOPT_READDATA, buf_query.get()); //initially it is just a nullptr
 
 		  // callback params
 		  curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &buf_response);
-		  curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, &CurlHandler::curl_write_func);
+		  curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, &CurlHandler::curl_write_func); //static
 
 		  //received headers
-		  curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, &CurlHandler::header_callback);
+		  curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, &CurlHandler::header_callback); //static
 		  /* pass in custom data to the callback */
 		  curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, &buf_headers);
 
-		  setHeaders(); //todo: unclear why it falls down
+		  setHeaders();
 	  }
 	  else THROW_CURL
   }
+
   size_t CurlHandler::read_callback(char *buffer, size_t size, size_t nmemb, void *userdata){
 	  if (not userdata) return 0; //avoid falling
 
-	  auto *q_data = (class QueryData *)userdata;
+	  auto *q = static_cast<http::query_data*>(userdata);
 	  size_t buffer_size = size*nmemb;
 
-	  if (hasDataToCopy(q_data)) {
-		  copyDataToBuffer(buffer, buffer_size, q_data);
-		  return getCopiedCount(q_data); /* we copied this many bytes */
+	  if (q->sizeleft > 0) { //we still have some data to copy
+		  q->curr_chunk_size = q->sizeleft > buffer_size ? buffer_size : q->sizeleft;
+		  std::memcpy(buffer, q->query_str.data() + q->curr_offset, q->curr_chunk_size);
+		  q->curr_offset += q->curr_chunk_size;
+		  q->sizeleft -= q->curr_chunk_size; //see two lines above, it is safe to subsract from size_t
+		  return q->curr_chunk_size; /* we copied this many bytes */
 	  }
 	  return 0; /* no more data left to deliver */
   }
+
   size_t CurlHandler::curl_write_func(char *data, size_t size, size_t nmemb, std::string *buffer) {
 	  size_t result = 0;
 	  if (buffer) {
@@ -251,6 +279,7 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 	  }
 	  return result;
   }
+
   size_t CurlHandler::header_callback(char *buffer, size_t size, size_t nitems, void *userdata){
 	  /* received header is nitems * size long in 'buffer' NOT ZERO TERMINATED */
 	  /* 'userdata' is set with CURLOPT_HEADERDATA */
@@ -261,7 +290,7 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 
   void CurlHandler::clearBuffers(){
 	  buf_response.clear();
-	  buf_error.clear();
+	  buf_error.fill('\0');
 	  buf_headers.clear();
 	  clearQuery();
 	  response_mime_type = ResponseType::None;
@@ -288,7 +317,8 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
   */
 	  return this->method==new_method; //it will work in the new environment
   }
-  void CurlHandler::updateMethod(const Method method){
+
+  void CurlHandler::updateMethod(Method method){
 	  (this->*set_method.at(method))();
 	  this->method = method;
   }
@@ -300,6 +330,7 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 		  {Method::Put, &CurlHandler::setPut},
 		  {Method::Delete, &CurlHandler::setDelete},
 		  {Method::Patch, &CurlHandler::setPatch},
+		  {Method::FTPListOnly, &CurlHandler::setFTPListOnly},
   };
 
   void CurlHandler::setNone()
@@ -335,28 +366,21 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 	  }
 	  else THROW_CURL
   }
+  void CurlHandler::setFTPListOnly(){
+	  if (curl_handle) {
+		  curl_easy_setopt(curl_handle, CURLOPT_DIRLISTONLY, 1L);
+	  }
+	  else THROW_CURL
+  }
 
   void CurlHandler::setNewQuery (std::string&& q) {
-	  auto new_query = std::make_unique<QueryData>(std::move(q));
+	  auto new_query = std::make_unique<http::query_data>(std::move(q));
 	  buf_query.reset(new_query.get());
   }
-  bool CurlHandler::hasDataToCopy (QueryData *p_q) {
-	  return p_q->sizeleft > 0;
-  }
-  size_t CurlHandler::getCurrQuerySize (QueryData *p_q) {
+
+  size_t CurlHandler::getCurrQuerySize (http::query_data *p_q) {
 	  return p_q->sizeleft;
   }
-  void CurlHandler::copyDataToBuffer (char *buffer, size_t buffer_size, QueryData *q) {
-	  q->curr_chunk_size = q->sizeleft > buffer_size ? buffer_size : q->sizeleft;
-	  std::memcpy(buffer, q->query_str.data() + q->curr_offset, q->curr_chunk_size);
-	  q->curr_offset += q->curr_chunk_size;
-	  q->sizeleft -= q->curr_chunk_size; //see two lines above, it is safe to subsract from size_t
-  }
-  size_t CurlHandler::getCopiedCount (QueryData *p_q) {
-	  return p_q->curr_chunk_size;
-  }
-
-
 
 
   void CurlHandler::setResponseType() {
@@ -383,6 +407,7 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 		  response_mime_type = ResponseType::Text;
 	  }
   }
+
   bool CurlHandler::isSetResponseType () const {
 	  return response_mime_type != ResponseType::None;
   }
