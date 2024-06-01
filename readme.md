@@ -1,7 +1,7 @@
 ## Bare minimum C++ libcurl wrapper
 
 ### Rational
-This is a C-library "libcurl" C++ MINI wrapper, that makes a query and gets a text or the simplest json as a result. No performance but extreme simplicity - basically makes GET, PUT queries, gets back the chars. See the tests for the details and examples.
+This is a C++ MINI wrapper for well known C-library "libcurl". Wrapper makes a query and gets a text or the simplest json as a result. No performance but extreme simplicity - basically makes GET, PUT queries, gets back the chars. See the tests for the details and examples.
 Zero dependencies except curl itself.
 
 ### Details
