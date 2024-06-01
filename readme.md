@@ -6,12 +6,11 @@ This is a C++ MINI wrapper for well known C-library "libcurl". Wrapper makes a q
 See the tests for the details and examples.
 
 ### Kudos
-[Magnificent Vinnie Falco](https://github.com/vinniefalco), his contribution to Boost for the broader subject. 
+To [magnificent Vinnie Falco](https://github.com/vinniefalco), his contribution to Boost for broader subject. 
 
 ### Dependency
-C++20
-
-libcurl
+* C++20
+* libcurl
 
 ### Details
 Allows to manage:
