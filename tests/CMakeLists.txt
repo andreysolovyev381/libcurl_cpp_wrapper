@@ -32,7 +32,7 @@ add_executable(${TESTS_NAME}
         ./tests_verbs.cpp
         ./tests_payload.cpp
         ./tests_headers.cpp
-        ./tests_basic_example.cpp
+        ./tests_examples.cpp
         ./main.cpp
 )
 

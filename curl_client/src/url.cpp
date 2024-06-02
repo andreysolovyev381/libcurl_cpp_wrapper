@@ -57,9 +57,6 @@ namespace curl_client {
 		full_str.clear();
 		full_str.reserve(std::max(full_str.capacity(), curl_client::const_values::url_elem_count));
 		for (const auto &elem : elems){
-			if (elem.empty()) {
-				continue;
-			}
 			full_str += elem;
 			full_str += curl_client::const_values::url_delim;
 		}

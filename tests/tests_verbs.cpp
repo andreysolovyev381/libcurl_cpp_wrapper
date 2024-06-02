@@ -14,7 +14,6 @@ auto make_request_verbs = [](curl_client::Method method, std::string const& test
 	return response;
 };
 
-inline
 auto check_response_ok = [](curl_client::response&& response){
 	ASSERT_TRUE(response->response_code == "CURLE_OK, ");
 	bool contains_OK {false};
