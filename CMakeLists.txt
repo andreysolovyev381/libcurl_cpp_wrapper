@@ -8,5 +8,5 @@ project(${PROJECT_NAME}
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_subdirectory(curl_client)
+add_subdirectory(./curl_client)
 add_subdirectory(./tests)

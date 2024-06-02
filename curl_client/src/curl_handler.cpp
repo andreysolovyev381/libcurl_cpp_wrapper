@@ -11,7 +11,9 @@ namespace curl_client {
 #define THROW_CURL throw std::runtime_error("Unable to access curl "+std::string(__PRETTY_FUNCTION__));
 #define DEBUG_OUPUT
 
-  CurlHandler::CurlHandler() {
+  CurlHandler::CurlHandler()
+    : method(Method::None)
+  {
 	  buf_response.reserve(curl_client::const_values::EXPECTED_REQUEST_SIZE);
 	  buf_error.fill('\0');
 	  buf_headers.reserve(curl_client::const_values::EXPECTED_HEADERS_RESPONSE_COUNT);
@@ -61,44 +63,6 @@ namespace curl_client {
 			  setHeader(http::header(field, value));
 		  }
 	  }
-
-	  /*
-If you use POST to a HTTP 1.1 server, you can send data without knowing
-the size before starting the POST if you use chunked encoding. You
-enable this by adding a header like "Transfer-Encoding: chunked" with
-CURLOPT_HTTPHEADER. With HTTP 1.0 or without chunked transfer, you must
-specify the size in the request.
-*/
-#ifdef USE_CHUNKED
-	  {
-  			//		  	struct curl_slist *chunk = NULL;
-
-  			chunk = curl_slist_append(chunk, "Transfer-Encoding: chunked");
-  			//		  	res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
-  			/* use curl_slist_free_all() after the *perform() call to free this list again */
-}
-#else
-/* Set the expected POST size. If you want to POST large amounts of data,
-   consider CURLOPT_POSTFIELDSIZE_LARGE */
-//curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long) wt.getCurrQuerySize());
-#endif
-
-#ifdef DISABLE_EXPECT
-	  /*
-Using POST with HTTP 1.1 implies the use of a "Expect: 100-continue"
-header.  You can disable this header with CURLOPT_HTTPHEADER as usual.
-NOTE: if you want chunked transfer too, you need to combine these two
-since you can only set one list of headers with CURLOPT_HTTPHEADER. */
-
-/* A less good option would be to enforce HTTP 1.0, but that might also have other implications. */
-{
-	//	struct curl_slist *chunk = NULL;
-
-	chunk = curl_slist_append(chunk, "Expect:");
-	//	res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
-	/* use curl_slist_free_all() after the *perform() call to free this list again */
-}
-#endif
 
 	  curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers_list);
 
@@ -161,7 +125,9 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
   }
 
   void CurlHandler::setMethod (Method method) {
-	  if (not isSetMethod(method)) updateMethod(method);
+	  if (not isSetMethod(method)) {
+		  updateMethod(method);
+	  }
   }
 
   void CurlHandler::setQuery(http::query_data_ptr&& query) {
@@ -187,11 +153,11 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
   }
 
   void CurlHandler::performRequest () {
-	  clearBuffers(); //must be BEFORE
+	  clean_up(); //must be BEFORE
 	  if(curl_handle) {
 		  request_return_code = curl_easy_perform(curl_handle);
 		  setResponseType();
-		  clearQuery(); //must be AFTER
+		  clear_query(); //must be AFTER
 	  }
 	  else THROW_CURL
   }
@@ -249,18 +215,15 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 		  /* some servers don't like requests that are made without a user-agent field, so we provide one */
 		  curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 
-		  //query, if any
 		  /* we want to use our own read function */
-		  curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION, &CurlHandler::read_callback); //static
-		  /* pointer to pass to our read function */
-		  curl_easy_setopt(curl_handle, CURLOPT_READDATA, buf_query.get()); //initially it is just a nullptr
+		  curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION, &CurlHandler::curl_read); //static
 
 		  // callback params
 		  curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &buf_response);
-		  curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, &CurlHandler::curl_write_func); //static
+		  curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, &CurlHandler::curl_write); //static
 
 		  //received headers
-		  curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, &CurlHandler::header_callback); //static
+		  curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, &CurlHandler::curl_header); //static
 		  /* pass in custom data to the callback */
 		  curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, &buf_headers);
 
@@ -269,7 +232,7 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 	  else THROW_CURL
   }
 
-  size_t CurlHandler::read_callback(char *buffer, size_t size, size_t nmemb, void *userdata){
+  size_t CurlHandler::curl_read(char *buffer, size_t size, size_t nmemb, void *userdata){
 	  if (not userdata) return 0; //avoid falling
 
 	  auto *q = static_cast<http::query_data*>(userdata);
@@ -285,7 +248,7 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 	  return 0; /* no more data left to deliver */
   }
 
-  size_t CurlHandler::curl_write_func(char *data, size_t size, size_t nmemb, std::string *buffer) {
+  size_t CurlHandler::curl_write(char *data, size_t size, size_t nmemb, std::string *buffer) {
 	  size_t result = 0;
 	  if (buffer) {
 		  buffer->append(data, size*nmemb);
@@ -294,7 +257,7 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 	  return result;
   }
 
-  size_t CurlHandler::header_callback(char *buffer, size_t size, size_t nitems, void *userdata){
+  size_t CurlHandler::curl_header(char *buffer, size_t size, size_t nitems, void *userdata){
 	  /* received header is nitems * size long in 'buffer' NOT ZERO TERMINATED */
 	  /* 'userdata' is set with CURLOPT_HEADERDATA */
 	  auto* headers = (std::vector<std::string> *)userdata;
@@ -302,39 +265,32 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 	  return nitems * size;
   }
 
-  void CurlHandler::clearBuffers(){
+  void CurlHandler::clean_up(){
+	  method = Method::None;
 	  buf_response.clear();
 	  buf_error.fill('\0');
 	  buf_headers.clear();
-	  clearQuery();
 	  response_mime_type = ResponseType::None;
   }
 
-  void CurlHandler::clearQuery() {
+  void CurlHandler::clear_query() {
 	  if (buf_query){
 		  buf_query.reset();
-		  if (curl_handle) curl_easy_setopt(curl_handle, CURLOPT_READDATA, nullptr);
+		  if (curl_handle) {
+			  curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 0L);
+			  curl_easy_setopt(curl_handle, CURLOPT_READDATA, nullptr);
+		  }
 		  else THROW_CURL
 	  }
   }
 
-  bool CurlHandler::isSetMethod(Method new_method) const
-  {
-	  /*
-  	if (curl) {
-  		char *method = NULL;
-  		curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_METHOD, &method);
-  		if(method)
-  			printf("Redirected to method: %s\n", method);
-  	}
-  	else throw std::runtime_error("Unable to access curl, check dependencies\n"+std::string(__PRETTY_FUNCTION__));
-  */
-	  return this->method==new_method; //it will work in the new environment
+  bool CurlHandler::isSetMethod(Method new_method) const {
+	  return method==new_method; //it will work in the new environment
   }
 
   void CurlHandler::updateMethod(Method method){
 	  (this->*set_method.at(method))();
-	  this->method = method;
+	  method = method;
   }
 
   const std::unordered_map<Method, void (CurlHandler::*)()> CurlHandler::set_method{
@@ -347,44 +303,91 @@ since you can only set one list of headers with CURLOPT_HTTPHEADER. */
 		  {Method::FTPListOnly, &CurlHandler::setFTPListOnly},
   };
 
-  void CurlHandler::setNone()
-  {
+  void CurlHandler::setNone() {
 	  throw std::runtime_error("Unable to SET CURL METHOD\n"+std::string(__PRETTY_FUNCTION__));
   }
   void CurlHandler::setGet(){
-	  if (curl_handle) curl_easy_setopt(curl_handle, CURLOPT_HTTPGET, 1L);
-	  else THROW_CURL
+	  if (curl_handle) {
+		  if (buf_query){
+			  curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1L);
+			  curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "GET");
+			  curl_easy_setopt(curl_handle, CURLOPT_READDATA, buf_query.get());
+		  }
+		  else {
+			  curl_easy_setopt(curl_handle, CURLOPT_HTTPGET, 1L);
+		  }
+	  }
+	  else {
+		  THROW_CURL
+	  }
   }
   void CurlHandler::setPost(){
 	  if (curl_handle) {
-		  // use POST
-		  curl_easy_setopt(curl_handle, CURLOPT_POST, 1L);
+		  if (buf_query){
+			  curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1L);
+			  curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "POST");
+			  curl_easy_setopt(curl_handle, CURLOPT_READDATA, buf_query.get());
+		  }
+		  else {
+			  curl_easy_setopt(curl_handle, CURLOPT_POST, 1L);
+		  }
 	  }
-	  else THROW_CURL
+	  else {
+		  THROW_CURL
+	  }
   }
   void CurlHandler::setPut(){
 	  if (curl_handle) {
-		  curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "PUT");
+		  if (buf_query){
+			  curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1L);
+			  curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "PUT");
+			  curl_easy_setopt(curl_handle, CURLOPT_READDATA, buf_query.get());
+		  }
+		  else {
+			  curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "PUT");
+		  }
 	  }
-	  else THROW_CURL
+	  else {
+		  THROW_CURL
+	  }
   }
   void CurlHandler::setDelete(){
 	  if (curl_handle) {
-		  curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "DELETE");
+		  if (buf_query){
+			  curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1L);
+			  curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "DELETE");
+			  curl_easy_setopt(curl_handle, CURLOPT_READDATA, buf_query.get());
+		  }
+		  else {
+			  curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "DELETE");
+		  }
 	  }
-	  else THROW_CURL
+	  else {
+		  THROW_CURL
+	  }
   }
   void CurlHandler::setPatch(){
 	  if (curl_handle) {
-		  curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "PATCH");
+		  if (buf_query){
+			  curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1L);
+			  curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "PATCH");
+			  curl_easy_setopt(curl_handle, CURLOPT_READDATA, buf_query.get());
+		  }
+		  else {
+			  curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "PATCH");
+		  }
 	  }
-	  else THROW_CURL
+	  else {
+		  THROW_CURL
+	  }
   }
   void CurlHandler::setFTPListOnly(){
 	  if (curl_handle) {
 		  curl_easy_setopt(curl_handle, CURLOPT_DIRLISTONLY, 1L);
 	  }
-	  else THROW_CURL
+	  else {
+		  THROW_CURL
+	  }
   }
 
   void CurlHandler::setNewQuery (std::string&& q) {

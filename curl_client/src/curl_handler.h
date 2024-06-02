@@ -53,13 +53,13 @@ namespace curl_client {
 	  CURLcode request_return_code;
 
 	  void Init();
-	  void clearBuffers();
-	  void clearQuery();
+	  void clean_up();
+	  void clear_query();
 
 	  //curl callbacks, must be statics because of curl
-	  static size_t read_callback(char *buffer, size_t size, size_t nmemb, void *userdata);
-	  static size_t curl_write_func(char *data, size_t size, size_t nmemb, std::string *buffer);
-	  static size_t header_callback(char *buffer, size_t size, size_t nitems, void *userdata);
+	  static size_t curl_read(char *buffer, size_t size, size_t nmemb, void *userdata);
+	  static size_t curl_write(char *data, size_t size, size_t nmemb, std::string *buffer);
+	  static size_t curl_header(char *buffer, size_t size, size_t nitems, void *userdata);
 
 	  //method
 	  Method method;

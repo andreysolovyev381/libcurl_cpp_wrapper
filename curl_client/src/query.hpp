@@ -7,17 +7,18 @@
 #include <string>
 #include <memory>
 #include <utility>
+#include <cstdint>
 
 namespace curl_client {
 
-	enum class Method {
-		None,
-		Get,
-		Post,
-		Put,
-		Delete,
-		Patch,
-		FTPListOnly
+	enum class Method : std::uint8_t {
+		None =          0,
+		Get =           1 << 1,
+		Post =          1 << 2,
+		Put =           1 << 3,
+		Delete =        1 << 4,
+		Patch =         1 << 5,
+		FTPListOnly =   1 << 6,
 	};
 
 	namespace http {

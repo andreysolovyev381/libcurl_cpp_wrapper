@@ -25,7 +25,7 @@ namespace curl_client {
 			response_->response_code = curl_client::const_values::NO_REQUEST_MADE;
 			return std::move(response_);
 		}
-		if (not curl) {
+		if (! curl) {
 			response_->body = curl_client::const_values::NO_CURL_HANDLE_MSG;
 			response_->response_code = curl_client::const_values::NO_REQUEST_MADE;
 			return std::move(response_);
@@ -37,11 +37,11 @@ namespace curl_client {
 			urlStr += '/';
 		}
 
-		curl->setUrl(urlStr);
-		curl->setMethod(method);
 		if (query) {
 			curl->setQuery(std::move(query));
 		}
+		curl->setUrl(urlStr);
+		curl->setMethod(method);
 
 		curl->performRequest();
 
