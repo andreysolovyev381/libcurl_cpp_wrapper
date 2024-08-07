@@ -21,18 +21,15 @@ namespace curl_client {
   }
 
   CurlHandler::~CurlHandler() {
-	  if (curl_handle) {
-		  curl_easy_cleanup(curl_handle);
-		  curl_handle = nullptr;
-
-	  }
 	  /**
 	   * @dev
 	   * this is supposed to free headers in curl slist,
 	   * but char* that is a data for each node is a pointer
-	   * to header in the map;
-	   * map will be cleaned by dtor, therefore slist should be cleaned
-	   * only from the pointers (data structure itself)
+	   * to header in the map, that is another class member;
+	   * map will be cleaned by its dtor, therefore slist should be cleaned
+	   * only from the pointers, so here we solve an issue of leaking 16 bytes
+	   * per each headers slist node along with avoiding to delete
+	   * a real string underneath of a list node.
 	   */
 	  if (headers_list) {
 #if 0
@@ -40,9 +37,16 @@ namespace curl_client {
 #endif
 		  while(headers_list) {
 			  auto tmp {headers_list->next};
+			  headers_list->data = nullptr;
+			  headers_list->next = nullptr;
 			  delete headers_list;
 			  std::swap(headers_list, tmp);
 		  }
+	  }
+
+	  if (curl_handle) {
+		  curl_easy_cleanup(curl_handle);
+		  curl_handle = nullptr;
 	  }
 
 	  curl_global_cleanup();
