@@ -156,7 +156,14 @@ namespace curl_client {
 	  else THROW_CURL
   }
 
-  void CurlHandler::performRequest () {
+  void CurlHandler::setForbidConnReUse(bool reuse) {
+	  if(curl_handle) {
+		  curl_easy_setopt(curl_handle, CURLOPT_FORBID_REUSE, (long)reuse);
+	  }
+	  else THROW_CURL
+  }
+
+	void CurlHandler::performRequest () {
 	  clean_up(); //must be BEFORE
 	  if(curl_handle) {
 		  request_return_code = curl_easy_perform(curl_handle);

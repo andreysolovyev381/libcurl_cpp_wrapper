@@ -62,6 +62,11 @@ namespace curl_client {
 		return this;
 	}
 
+	request* request::set_forbid_conn_reuse (bool reuse) {
+		if (curl) curl->setForbidConnReUse(reuse);
+		return this;
+	}
+
 	request* request::setURL(std::string path_) {
 		auto new_url_ptr {url::create(std::move(path_))};
 		std::swap(url_, new_url_ptr);

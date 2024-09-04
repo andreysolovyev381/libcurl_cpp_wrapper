@@ -29,6 +29,7 @@ namespace curl_client {
 	  void setMethod(Method method);
 	  void setQuery(http::query_data_ptr&& query);
 	  void setVerbose(bool verbose);
+	  void setForbidConnReUse(bool reuse);
 	  void performRequest ();
 
 	  http::headers const& getRequestHeaders() const;

@@ -21,6 +21,8 @@ namespace curl_client {
 
 		request* set_verbose (bool verbose);
 
+		request* set_forbid_conn_reuse (bool reuse);
+
 		request* setURL(std::string path_);
 
 		std::string const& getURL() const;
